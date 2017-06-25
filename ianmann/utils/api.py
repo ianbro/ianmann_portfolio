@@ -1,7 +1,8 @@
 from datetime import datetime
 
-from django.http import JsonResponse, HttpResponse
-from django.shortcuts import render
+from django.db import models
+from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest
+from django.shortcuts import render, get_object_or_404
 from django.views.generic import View
 
 class IanmannJsonResponse(JsonResponse):
@@ -35,7 +36,7 @@ def valid_method(request, allowed_methods):
 
     Returns True if the request uses a valid verb. False otherwise
     """
-    return request.method in allowed_methods
+    return unicode(request.method) in allowed_methods
 
 def respond_bad_request_verb(request):
     """
@@ -43,6 +44,42 @@ def respond_bad_request_verb(request):
     that is not allowed by the view.
     """
     return HttpResponseBadRequest("This page does not support the method \"{0}\"".format(request.method))
+
+def respond_success_no_results_to_return(action):
+    """
+    Returns a json response of type IanmannJsonResponse that simply says the
+    requested action was completed. This is used when no results need to be
+    returned.
+    """
+    return IanmannJsonResponse({action: True})
+
+def respond_list_deleted(count):
+    """
+    Returns a IanmannJsonResponse that states that count number of items were
+    successfully deleted.
+    """
+    return IanmannJsonResponse({
+        "deleted": True,
+        "number_entries_affected": count
+    })
+
+def get_params_to_queryset_kwargs(parameters):
+    """
+    Each parameter is wrapped in a RestApiGetParameter
+    object and parsed and validated in the instantiation method for that
+    object. Then they are used in the filter that will return the queryset
+    of model objects.
+
+    This method acheives that and returns the parameters as a key_value pair
+    that can be sent to a queryset.
+    """
+    kwargs_for_filter = {}
+
+    for key, value in parameters.items():
+        get_param = RestApiGetParameter(1, key, value)
+        kwargs_for_filter[get_param.key_value()[0]] = get_param.key_value()[1]
+
+    return kwargs_for_filter
 
 class RestApiGetParameter:
     """
@@ -61,6 +98,17 @@ class RestApiGetParameter:
                             will cause the value to be converted to an int while
                             'bool' will cause the value to be converted to a
                             boolean.)
+
+    Valid formats for GET parameter string:
+        [name]::[type]=[value]
+
+    [name]: any string that corresponds to a model field on the model that the
+    requested API view is querying.
+
+    [type]: any string that is listed in _VALID_PARAM_TYPES.
+
+    [value]: any string that can be parsed into its corresponding python type.
+    The python type is determined by the type string in the parameter key.
     """
 
     _NAME_TYPE_DELIMITER = "::"
@@ -76,7 +124,7 @@ class RestApiGetParameter:
         Returns an error that should be thrown when teh key is not in a valid
         format.
         """
-        return ValueError("Error on GET parameter key: {0}. The key must be in the format 'name::type' where type is one of ['{1}'].".format(get_param_key, "', '".join(_VALID_PARAM_TYPES)))
+        return ValueError("Error on GET parameter key: {0}. The key must be in the format 'name::type' where type is one of ['{1}'].".format(get_param_key, "', '".join(RestApiGetParameter._VALID_PARAM_TYPES)))
 
     def _bad_python_value_error(self, py_obj):
         """
@@ -85,7 +133,7 @@ class RestApiGetParameter:
         """
         return ValueError(
             "Error on creating GET parameter with value: {0}. The object type must be one of ['{1}'], not {2}.".format(
-                get_param_key,
+                py_obj,
                 "', '".join([t.__name__ for t in self._VALID_PYTHON_TYPES]),
                 py_obj.__class__.__name__
             )
@@ -99,13 +147,14 @@ class RestApiGetParameter:
         This method assumes that the key is in the format name::type. If this is
         not so, then a ValueError is thrown.
         """
-        param_key_parts = get_param_key.split(_NAME_TYPE_DELIMITER)
+        print get_param_key
+        param_key_parts = get_param_key.split(RestApiGetParameter._NAME_TYPE_DELIMITER)
         if not len(param_key_parts) == 2 or "" in param_key_parts:
             raise self._bad_param_key_format_error(get_param_key)
 
         self._attribute_name = param_key_parts[0]
 
-        if param_key_parts[1] in _VALID_PARAM_TYPES:
+        if param_key_parts[1] in RestApiGetParameter._VALID_PARAM_TYPES:
             self._attribute_type = param_key_parts[1]
         else:
             raise self._bad_param_key_format_error(get_param_key)
@@ -120,10 +169,11 @@ class RestApiGetParameter:
         to properly convert from a string to certain datatypes. Datetime objects
         are an example of this.
         """
+        get_param_value = str(get_param_value)
         if self._attribute_type == "int":
             # Assume value is in integer format. (All numeric, no decimal point)
             self._attribute_value = int(get_param_value)
-        elif self._attribute_type == "str"
+        elif self._attribute_type == "str":
             # Convert value to a string.
             self._attribute_value = str(get_param_value)
         elif self._attribute_type == "bool":
@@ -159,7 +209,7 @@ class RestApiGetParameter:
             # Set value as an int
             self._attribute_type = "int"
             self._attribute_value = py_obj
-        elif issubclass(obj_class, str):
+        elif issubclass(obj_class, str) or issubclass(obj_class, unicode):
             # Set value as a string
             self._attribute_type = "str"
             self._attribute_value = py_obj
@@ -196,7 +246,7 @@ class RestApiGetParameter:
         if self._attribute_type == "int":
             # Assume value is an int
             return str(self._attribute_value)
-        elif self._attribute_type == "str"
+        elif self._attribute_type == "str":
             # Convert value to a string.
             return str(self._attribute_value)
         elif self._attribute_type == "bool":
@@ -216,14 +266,14 @@ class RestApiGetParameter:
         """
         Creates a RestApiGetParameter instance from the given data. This
         constructor supports input in the following formats:
-            input_method == 1:
+            input_method == 1: (From url string)
                 GET parameter string where the key (in args[0]) is expected to be in
                 the format "name::type" and the value (in args[1]) is expected to be
                 a string representation that can be converted correctly into it's
                 python representation (See self._parse_param_value for format
                 info).
 
-            input_method == 2:
+            input_method == 2: (From python object)
                 String (in args[0]) that is the key name and a python object
                 (in args[1]) (see self._set_value_and_type_from_python_object
                 for acceptable types) that will take on the value. The type
@@ -254,7 +304,7 @@ class RestApiGetParameter:
         querying using this instance. This is ready to be sent as a kwarg to any
         model filter.
         """
-        return {self._attribute_name: self._attribute_value}
+        return self._attribute_name, self._attribute_value
 
 class ApiView(View):
     """
@@ -290,6 +340,27 @@ class ApiView(View):
         else:
             return super(ApiView, self).dispatch(request, *args, **kwargs)
 
+    def get_params_to_queryset_kwargs(self, verb=None):
+        """
+        Each parameter is wrapped in a RestApiGetParameter
+        object and parsed and validated in the instantiation method for that
+        object. Then they are used in the filter that will return the queryset
+        of model objects.
+
+        This method acheives that and returns the parameters as a key_value pair
+        that can be sent to a queryset.
+
+        This will get parameters from GET, PUT, POST or DELETE. The one that it
+        gets them from is decided by verb. It defaults to self.request.method.
+
+        verb must be one of "GET", "PUT", "POST" or "DELETE".
+
+        NOTE: This uses the method implementation that is in this module outside
+        of this class. This is not recursion; the method it is calling just has
+        the same name. This method just acts as a wrapper for that.
+        """
+        return get_params_to_queryset_kwargs(getattr(self.request, verb or self.request.method))
+
     def valid_method(self):
         """
         Simple wrapper for calling valid_method from this module, sending it
@@ -298,6 +369,28 @@ class ApiView(View):
         return valid_method(self.request, self.allowed_methods)
 
 class ModelCrudApiView(ApiView):
+    """
+    Provides default implementation of the get, post, put and delete methods.
+    This allows extremely easy configuration and setup for a REST API that
+    provides CRUD operations on a model.
+
+    Some examples of how this helps is in creating and viewing model objects.
+    In order to allow this, you simply add GET and PUT to the list of
+    allowed_methods. The methods that are called in these cases (get() and
+    put()) already implement creation and viewing by default so no logic is
+    needed.
+
+    Fields:
+
+        model - class object; must extend Model:
+            The Model class on which the CRUD operations will be applied.
+
+        instance_pk - int
+            The Primary Key for the instance for which certain CRUD operations
+            will be applied. This is only needed on GET and DELETE because these
+            are the only methods that use a single active instance. PUT will
+            ignore this field by default.
+    """
 
     model = None
 
@@ -315,8 +408,13 @@ class ModelCrudApiView(ApiView):
         This is optional because the request may be trying to create a new
         object, not retreive an existing one. In that case, a pk would not be
         sent to the url parameters.
+
+
+        TODO: May have to move csrf token input from request.PUT and
+        DELETE. It is not in the right format to be parsed by the method that
+        parses RestApiGetParameter objects so it will cause errors for that.
         """
-        self.instance_pk = kwargs.get("pk", 0)
+        self.instance_pk = int(kwargs.get("pk", 0) or 0)
         return super(ModelCrudApiView, self).dispatch(request, *args, **kwargs)
 
     def get_object(self):
@@ -335,9 +433,105 @@ class ModelCrudApiView(ApiView):
         """
         return self.get_object().json()
 
-    def get_object_list(self, queries):
-        pass
+    def get_object_list(self):
+        """
+        Returns a list of objects that are of the type denoted in self.model.
+        The objects returned will be those that fulfill the parameters in the
+        urls GET parameters.
+        """
+        kwargs_for_filter = self.get_params_to_queryset_kwargs("GET")
+
+        return self.model.objects.filter(**kwargs_for_filter)
+
+    def get_object_list_json(self):
+        """
+        Returns a list of objects of the type denoted in self.model. Those
+        objects are returned in this method in json format according to the json
+        method on their model class.
+
+        This method uses self.get_object_list to get the list of objects.
+        """
+        return [x.json() for x in self.get_object_list()]
+
+    def create_object(self):
+        """
+        Creates an instance of self.model using the values supplied in the PUT
+        data payload.
+        """
+        instantiation_params = self.get_params_to_queryset_kwargs("PUT")
+
+        return self.model.objects.create(**instantiation_params)
+
+    def delete_object(self):
+        """
+        Deletes the object from the database that is of the type designated by
+        self.model and has the id of self.instance_pk.
+
+        If no object with those conditions is found, then a 404 error is thrown.
+        """
+        instance = get_object_or_404(self.model, pk=self.instance_pk)
+        instance.delete()
+
+    def delete_object_list(self):
+        """
+        Deletes a list of objects that are of the type denoted in self.model.
+        The objects deleted will be those that fulfill the parameters in the
+        urls GET parameters.
+
+        Returns the number of items deleted.
+        """
+        kwargs_for_filter = self.get_params_to_queryset_kwargs("DELETE")
+
+        objects_to_delete = self.model.objects.filter(**kwargs_for_filter)
+        count = objects_to_delete.count()
+        objects_to_delete.delete()
+
+        return count
+
+    def put(self, request, *args, **kwargs):
+        """Creates an object and returns the resulting object in json format."""
+        return IanmannJsonResponse(self.create_object().json())
 
     def get(self, request, *args, **kwargs):
+        """
+        Returns either a list of objects or a single object based on the format
+        of the url.
 
-        return IanmannJsonResponse(self.get_object_json())
+        If the url has a value set for the pk url parameter, then
+        this view will assume the request is asking for a single entity.
+
+        Otherwise, this view will assume the request is asking for a list of
+        entities.
+
+        The parameters sent to the model filter will be retreived
+        from the url GET parameters. These parameters will be wrapped in
+        RestApiGetParameter object so this means that all GET parameters must
+        be in a valid format to be parsed by that class.
+        """
+        if self.instance_pk and self.instance_pk > 0:
+            return IanmannJsonResponse(self.get_object_json())
+        else:
+            return IanmannJsonResponse(self.get_object_list_json())
+
+    def delete(self, request, *args, **kwargs):
+        """
+        Deletes either a list of objects or a single object based on the format
+        of the url.
+
+        If the url has a value set for the pk url parameter, then
+        this view will assume the request is asking to delete a single entity.
+
+        Otherwise, this view will assume the request is deleting a list of
+        entities.
+
+        The parameters sent to the model filter will be retreived
+        from the parameters in the data payload. These parameters will be
+        wrapped in RestApiGetParameter object so this means that all parameters
+        must be in a valid format to be parsed by that class.
+        """
+        if self.instance_pk and self.instance_pk > 0:
+            self.delete_object()
+            return respond_success_no_results_to_return("deleted")
+        else:
+            num_deleted = self.delete_object_list()
+            return respond_list_deleted(num_deleted)

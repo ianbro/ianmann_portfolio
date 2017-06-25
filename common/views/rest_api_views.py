@@ -10,12 +10,10 @@ from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404
 
 from common.models import Country
-from ianmann.utils.api import ApiView
+from ianmann.utils.api import ApiView, ModelCrudApiView
 
-class CountryCrudView(ApiView):
+class CountryCrudView(ModelCrudApiView):
+
+    model = Country
 
     allowed_methods = ("POST", "GET", "PUT", "DELETE")
-
-    def get(self, request, *args, **kwargs):
-        country = get_object_or_404(Country, pk=kwargs.get("pk", None))
-        return country.json()
