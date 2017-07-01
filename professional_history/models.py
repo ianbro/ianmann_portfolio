@@ -6,14 +6,21 @@ from django.db import models
 import ianmann.utils.custom_model_fields as cmf
 from common.models import Organization
 
-class Company(models.Model):
+class Involvement(models.Model):
 
-    name = cmf.RequiredCharField(max_length=50)
-    company_website = models.CharField(max_length=200)
-    hq_address = models.CharField(max_length=10)
+    description = cmf.RequiredTextField(max_length=500)
+    organization = cmf.RequiredForeignKey(Organization)
 
-# Create your models here.
-class Employment(models.Model):
+class Employment (models.Model):
 
     title = cmf.RequiredCharField(max_length=50)
     organization = cmf.RequiredForeignKey(Organization)
+    description = cmf.RequiredTextField(max_length=500)
+
+class ProfessionalProject(models.Model):
+
+    name = cmf.RequiredCharField(max_length=100)
+    description = cmf.RequiredTextField(max_length=300)
+    employment = cmf.RequiredForeignKey(Employment)
+
+    github_link = models.CharField(max_length=100)

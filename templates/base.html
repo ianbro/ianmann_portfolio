@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <title>{% block title %}{% endblock title %} | Ian Kirkpatrick Portfolio</title>
+  </head>
+
+  <body>
+    <div id="navbar">
+
+      <div id="logo-container">
+        {% include "logo.html" %}
+      </div>
+
+      <div id="profile-name-container">
+        {{ user.first_name + " " user.last_name }}
+      </div>
+
+      <div id="nav-button-container">
+      </div>
+
+    </div>
+
+    {% block content %}
+    {% endblock content %}
+  </body>
+
+</html>

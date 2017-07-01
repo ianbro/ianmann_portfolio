@@ -6,8 +6,18 @@ All urls in this file should return views in "common/views/rest_api_views.py".
 """
 from django.conf.urls import url
 
-from common.views.rest_api_views import CountryCrudView
+from common.views.rest_api_views import (CountryCrudView,
+                                            RegionCrudView,
+                                            CityCrudView,
+                                            StreetCrudView,
+                                            AddressCrudView,
+                                            OrganizationCrudView)
 
 urlpatterns = [
     url(r'^crud/country/(?:(?P<pk>\d+))?', CountryCrudView.as_view(), name="country_crud"),
+    url(r'^crud/region/(?:(?P<pk>\d+))?', RegionCrudView.as_view(), name="region_crud"),
+    url(r'^crud/city/(?:(?P<pk>\d+))?', CityCrudView.as_view(), name="city_crud"),
+    url(r'^crud/street/(?:(?P<pk>\d+))?', StreetCrudView.as_view(), name="street_crud"),
+    url(r'^crud/address/(?:(?P<pk>\d+))?', AddressCrudView.as_view(), name="address_crud"),
+    url(r'^crud/organization/(?:(?P<pk>\d+))?', OrganizationCrudView.as_view(), name="organization_crud"),
 ]
