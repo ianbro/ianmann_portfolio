@@ -10,7 +10,7 @@ from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404
 
 from common.models import Country
-from ianmann.utils.api import ApiView, ModelCrudApiView
+from ezi.views import ApiView, ModelCrudApiView
 
 class CountryCrudView(ModelCrudApiView):
 
