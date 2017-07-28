@@ -50,7 +50,7 @@ class RequiredTextField(models.TextField):
         blank = kwargs.pop("blank", False)
         null = kwargs.pop("null", False)
 
-        return super(RequiredCharField, self).__init__(*args, blank=blank, null=null, **kwargs)
+        return super(RequiredTextField, self).__init__(*args, blank=blank, null=null, **kwargs)
 
 
 class RequiredForeignKey(models.ForeignKey):

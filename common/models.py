@@ -3,6 +3,9 @@ from __future__ import unicode_literals
 
 from django.db import models
 
+from ezi.views import model_crud_api_view_factory
+
+import common.views as common_views
 import ianmann.utils.custom_model_fields as cmf
 
 """
@@ -23,6 +26,10 @@ class Country(models.Model):
     personal addresses.
     """
     name = cmf.RequiredCharField(max_length=50)
+
+    @classmethod
+    def crud_api_view(cls):
+        return model_crud_api_view_factory(cls)
 
     def json(self):
         """
@@ -52,6 +59,24 @@ class Region(models.Model):
     name = cmf.RequiredCharField(max_length=50)
     region_type = cmf.RequiredCharField(max_length=2, choices=REGION_TYPES, default="ST")
     country = cmf.RequiredForeignKey(Country)
+
+    def region_type_to_string(self):
+        return dict(self.REGION_TYPES)[self.region_type]
+
+    @classmethod
+    def crud_api_view(cls):
+        return model_crud_api_view_factory(cls)
+
+    def json(self):
+        """
+        Returns a json representation of this object.
+        See "styleguides/CODe_STYLE.md" for more information on this method.
+        """
+        return {
+            "name": self.name,
+            "region_type": self.region_type_to_string(),
+            "country": self.country.json()
+        }
 
 class City(models.Model):
     """

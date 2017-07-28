@@ -3,6 +3,8 @@
 Put views for rest apis in common here. These views should return json format.
 
 Any views that take input should NEVER take sensitive information in the url.
+
+TODO: This file is deprecated. I plan on using the ezi api view/url factory.
 """
 from __future__ import unicode_literals
 
